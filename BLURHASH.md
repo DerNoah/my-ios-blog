@@ -1,16 +1,13 @@
 ---
 layout: post
 title: "BlurHash: Instant Image Placeholders on iOS"
+subtitle: "A step-by-step UIKit guide to implementing smooth, color-accurate image placeholders using BlurHash."
 permalink: /articles/blurhash/
 date: 2026-06-02
 ---
 
 * TOC
 {:toc}
-
-# BlurHash: Instant Image Placeholders on iOS
-
-A step-by-step UIKit guide to implementing smooth, color-accurate image placeholders using BlurHash.
 
 ---
 
