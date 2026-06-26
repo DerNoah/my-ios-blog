@@ -3,3 +3,9 @@ description: My iOS blog
 theme: minima
 url: "http://www.noahmilan.com"
 markdown: kramdown
+
+# Keep article generator scripts and the large source image out of the built site.
+exclude:
+  - articles/blurhash/scripts
+  - articles/blurhash/blurhash_example.jpg
+  - articles/blurhash/tshirt_example.jpg
