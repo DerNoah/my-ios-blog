@@ -237,7 +237,7 @@ func reveal(_ image: UIImage, in imageView: UIImageView) {
 
 The placeholder cross-dissolves into the sharp photo, briefly frosting over at the midpoint before resolving — no blank flash, no hard cut.
 
-![The placeholder dissolving into the real image](04-reveal.gif){:width="280"}
+<video src="04-reveal.mp4" width="280" autoplay loop muted playsinline></video>
 *Step 4 — the blurred placeholder dissolves into the sharp photo, with a frosted-glass shimmer mid-transition.*
 
 ---
