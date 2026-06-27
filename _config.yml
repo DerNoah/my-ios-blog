@@ -9,3 +9,4 @@ exclude:
   - articles/blurhash/scripts
   - articles/blurhash/blurhash_example.jpg
   - articles/blurhash/tshirt_example.jpg
+  - articles/visualeffect/scripts
