@@ -29,6 +29,7 @@
 //      input = ../blurhash_example.jpg, output_dir = ../  (the articles/blurhash folder)
 //
 
+import AVFoundation
 import Foundation
 import CoreGraphics
 import CoreImage
@@ -46,11 +47,11 @@ let tonalScale: CGFloat = 0.65
 let tonalBias: CGFloat = 0.175
 let blurRadius: Float = 2
 
-// Step 4 reveal animation (GIF): hold placeholder -> cross-dissolve -> hold photo.
-let gifHoldStart = 4
-let gifTransition = 16
-let gifHoldEnd = 8
-let gifFrameDelay = 0.05            // seconds per frame
+// Step 4 reveal animation (MP4): hold placeholder -> cross-dissolve -> hold photo, at 60 fps.
+let revealFPS = 60
+let gifHoldStart = 12              // ~0.2 s
+let gifTransition = 48             // ~0.8 s dissolve
+let gifHoldEnd = 24               // ~0.4 s
 let shimmerMax = 6.0               // peak Gaussian "frosted-glass" radius mid-transition
 
 // MARK: - Base83
@@ -382,6 +383,56 @@ func writeGIF(_ frames: [CGImage], frameDelay: Double, to path: String) {
     print("  wrote \(path) (\(frames.count) frames)")
 }
 
+// Encode a CGImage sequence to a web-friendly H.264 .mp4 (AVAssetWriter — no ffmpeg).
+func writeMP4(_ frames: [CGImage], fps: Int, to path: String) {
+    let url = URL(fileURLWithPath: path)
+    try? FileManager.default.removeItem(at: url)
+    let w = frames[0].width, h = frames[0].height
+    guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else {
+        fputs("error: could not create AVAssetWriter at \(path)\n", stderr); exit(1)
+    }
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: w, AVVideoHeightKey: h,
+        AVVideoCompressionPropertiesKey: [
+            AVVideoAverageBitRateKey: w * h * 12,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+        ],
+    ])
+    input.expectsMediaDataInRealTime = false
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        kCVPixelBufferWidthKey as String: w, kCVPixelBufferHeightKey as String: h,
+    ])
+    writer.add(input)
+    writer.startWriting()
+    writer.startSession(atSourceTime: .zero)
+
+    for (i, frame) in frames.enumerated() {
+        while !input.isReadyForMoreMediaData { usleep(1000) }
+        var pb: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, adaptor.pixelBufferPool!, &pb)
+        let buffer = pb!
+        CVPixelBufferLockBaseAddress(buffer, [])
+        let cg = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: w, height: h,
+                           bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+                           space: CGColorSpaceCreateDeviceRGB(),
+                           bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                               | CGBitmapInfo.byteOrder32Little.rawValue)!
+        cg.draw(frame, in: CGRect(x: 0, y: 0, width: w, height: h))
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(i), timescale: CMTimeScale(fps)))
+    }
+    input.markAsFinished()
+    let sem = DispatchSemaphore(value: 0)
+    writer.finishWriting { sem.signal() }
+    sem.wait()
+    guard writer.status == .completed else {
+        fputs("mp4 write failed: \(writer.error?.localizedDescription ?? "")\n", stderr); exit(1)
+    }
+    print("  wrote \(path) (\(frames.count) frames, \(w)x\(h) @ \(fps)fps)")
+}
+
 // MARK: - Step 3: black-hole artifact demo
 
 // A near-black subject on a white background overshoots the 4x3 DCT and clips the
@@ -447,7 +498,7 @@ for k in 1...gifTransition {
     frames.append(revealFrame(placeholder: placeholderCI, real: realCI, rect: rect, t: t))
 }
 frames += [CGImage](repeating: originalDisplay, count: gifHoldEnd)
-writeGIF(frames, frameDelay: gifFrameDelay, to: "\(outDir)/04-reveal.gif")
+writeMP4(frames, fps: revealFPS, to: "\(outDir)/04-reveal.mp4")
 
 // Step 3 demo -- the black-hole failure case (only if the t-shirt source is present)
 let tshirtPath = "\(articleDir)/tshirt_example.jpg"

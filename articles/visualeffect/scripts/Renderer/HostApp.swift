@@ -81,8 +81,8 @@ struct RenderRunner: View {
 
     @MainActor func renderAll() -> String {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        func write(_ view: some View, _ name: String) {
-            let r = ImageRenderer(content: view.frame(width: W, height: H)); r.scale = 1
+        func write(_ view: some View, _ name: String, scale: CGFloat = 1) {
+            let r = ImageRenderer(content: view.frame(width: W, height: H)); r.scale = scale
             if let data = r.uiImage?.pngData() { try? data.write(to: docs.appendingPathComponent(name)) }
         }
 
@@ -96,30 +96,33 @@ struct RenderRunner: View {
         write(frostedCard(opacity: 0.75), "09-opacity.png")
         write(frostedCard(opacity: 1.0), "10-frosted.png")
 
-        // 11 blur-in: photo blurs 0 -> 6 with a slight spring overshoot (content stays opaque).
-        let blurinN = 16
-        for f in 0...blurinN {
-            let t = Double(f) / Double(blurinN)
-            let r = 6.0 * (t >= 1 ? 1 : 1 - exp(-6 * t) * cos(7.5 * t))
+        // The animations are rendered at 2× (640×960) and seamless-looped for 60 fps MP4.
+        // 11 blur-in: spring 0 → 6, then ease back to 0 (so the loop has no hard cut).
+        let blurinN = 90
+        for f in 0..<blurinN {
+            let ph = Double(f) / Double(blurinN)
+            let r: Double = ph < 0.5
+                ? 6.0 * { let t = ph * 2; return t >= 1 ? 1 : 1 - exp(-6 * t) * cos(7.5 * t) }()  // spring in
+                : 6.0 * (1 - smoothstep((ph - 0.5) * 2))                                            // ease back out
             write(effectStill(VisualEffectValues(blurRadius: r), overridesOpacity: false),
-                  String(format: "11-blurin-%03d.png", f))
+                  String(format: "11-blurin-%03d.png", f), scale: 2)
         }
-        // 12 scrub: fractionComplete 0 -> 1 -> 0, blur/brightness/saturation interpolate together.
-        let scrubN = 24, sb = 6.0, sbr = 0.15, ss = 1.6
-        for f in 0...scrubN {
-            let p = f <= scrubN / 2 ? smoothstep(Double(f) / Double(scrubN / 2))
-                                    : smoothstep(1 - Double(f - scrubN / 2) / Double(scrubN - scrubN / 2))
+        // 12 scrub: fractionComplete 0 → 1 → 0 — blur/brightness/saturation interpolate together.
+        let scrubN = 90, sb = 6.0, sbr = 0.15, ss = 1.6, scrubHalf = 45
+        for f in 0..<scrubN {
+            let p = f <= scrubHalf ? smoothstep(Double(f) / Double(scrubHalf))
+                                   : smoothstep(1 - Double(f - scrubHalf) / Double(scrubN - scrubHalf))
             let v = VisualEffectValues(blurRadius: sb * (1 - p), brightness: sbr * (1 - p),
                                        saturation: 1 + (ss - 1) * (1 - p))
-            write(effectStill(v, overridesOpacity: false), String(format: "12-scrub-%03d.png", f))
+            write(effectStill(v, overridesOpacity: false), String(format: "12-scrub-%03d.png", f), scale: 2)
         }
-        // 13 fade-out: a frosted overlay (blurOverridesOpacity = true) dissolves to reveal the sharp photo.
-        let fadeN = 16
-        for f in 0...fadeN {
-            let t = Double(f) / Double(fadeN)
-            let blur = 6.0 * (1 - (1 - (1 - t) * (1 - t)))      // ease-out 6 -> 0
-            let overlay = effectStill(VisualEffectValues(blurRadius: blur), overridesOpacity: true)
-            write(ZStack { photoView(); overlay }, String(format: "13-fadeout-%03d.png", f))
+        // 13 fade-out: a frosted overlay (blurOverridesOpacity = true) dissolves to the sharp photo and back.
+        let fadeN = 90
+        for f in 0..<fadeN {
+            let ph = Double(f) / Double(fadeN)
+            let s = ph < 0.5 ? ph * 2 : (1 - (ph - 0.5) * 2)    // 0 → 1 → 0 (frosted → sharp → frosted)
+            let overlay = effectStill(VisualEffectValues(blurRadius: 6.0 * (1 - s) * (1 - s)), overridesOpacity: true)
+            write(ZStack { photoView(); overlay }, String(format: "13-fadeout-%03d.png", f), scale: 2)
         }
 
         try? Data().write(to: docs.appendingPathComponent("_DONE"))
@@ -168,6 +171,10 @@ final class EdgeViewController: UIViewController {
                                            initialValues: VisualEffectValues(blurRadius: 8))
     private let topMask = CAGradientLayer()
     private let botMask = CAGradientLayer()
+
+    private var link: CADisplayLink?                  // continuous auto-scroll (video capture)
+    private var elapsed: CFTimeInterval = 0
+    private let scrollPeriod: CFTimeInterval = 6.0    // one ping-pong loop
 
     init(frame: Int, total: Int) { self.frameIndex = frame; self.total = total; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -235,7 +242,23 @@ final class EdgeViewController: UIViewController {
         scrollView.contentOffset = CGPoint(x: 0, y: maxOff * CGFloat(t))
     }
 
-    override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); applyScroll() }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if total == 0 {                                // continuous auto-scroll for recordVideo
+            let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            l.add(to: .main, forMode: .common); link = l
+        } else {
+            applyScroll()                              // static frame-stepped position for a screenshot
+        }
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        elapsed += link.targetTimestamp - link.timestamp
+        let ph = elapsed.truncatingRemainder(dividingBy: scrollPeriod) / scrollPeriod
+        let t = ph < 0.5 ? smoothstep(ph * 2) : smoothstep(1 - (ph - 0.5) * 2)   // eased ping-pong
+        let maxOff = max(0, Self.contentHeight - view.bounds.height)
+        scrollView.contentOffset = CGPoint(x: 0, y: maxOff * CGFloat(t))
+    }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -251,7 +274,7 @@ final class EdgeViewController: UIViewController {
                                  NSNumber(value: Double(1 - botSafe / h)), 1]
         CATransaction.commit()
 
-        applyScroll()   // deterministic ping-pong scroll position for this frame
+        if total != 0 { applyScroll() }   // frame-stepped position (continuous mode drives its own scroll)
     }
 
     private func makeCard(_ i: Int) -> UIView {

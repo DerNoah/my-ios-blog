@@ -74,7 +74,7 @@ The fashionable way to treat the top and bottom of a scroll view is a **variable
 
 VisualEffect gives you the same look with none of that. The blur it applies is uniform, so the *variable* part comes from **masking the live-backdrop view with a gradient** — `.mask(LinearGradient(...))` in SwiftUI, or a `CAGradientLayer` in UIKit. The result updates live as content scrolls, animates like any other SwiftUI view, and never round-trips through Core Image.
 
-![A variable blur fading along the top and bottom edges as content scrolls and dissolves behind it](02-edgescroll.gif){:width="280"}
+<video src="02-edgescroll.mp4" width="280" autoplay loop muted playsinline></video>
 *The blur and the fade stay pinned to the edges while the feed scrolls. Toward each edge a card progressively blurs and then dissolves into the wallpaper; the centre stays sharp and fully opaque.*
 
 The effect is two gradient masks, both confined to the edges:
@@ -315,7 +315,7 @@ public static let blurredIn  = VisualEffectValues(blurRadius: 6)   // frosted
 public static let blurredOut = VisualEffectValues()               // neutral / clear
 ```
 
-![The blur animating in with a spring](11-blurin.gif){:width="280"}
+<video src="11-blurin.mp4" width="280" autoplay loop muted playsinline></video>
 *Assigning `.blurredIn` springs the blur from 0 to 6 — note the slight overshoot before it settles.*
 
 ---
@@ -372,7 +372,7 @@ What each call does:
 - **`finishInteractive()`** eases the rest of the way out to `.blurredOut` (a commit).
 - **`cancelInteractive()`** springs back to the snapshot (an abort).
 
-![Scrubbing the blur in and out with a gesture](12-scrub.gif){:width="280"}
+<video src="12-scrub.mp4" width="280" autoplay loop muted playsinline></video>
 *Driving `fractionComplete` from 0 to 1 and back — blur, brightness, and saturation interpolate together as the value scrubs.*
 
 ---
@@ -388,7 +388,7 @@ derivedOpacity = min(1, blurRadius)   // below radius 1, fade out via opacity
 
 So as `blurRadius` drops from `1` to `0`, the surface stays blurred at radius `1` while its opacity falls to zero — it dissolves over the sharp content beneath rather than snapping into focus.
 
-![The blur dismissing by fading out cleanly](13-fadeout.gif){:width="280"}
+<video src="13-fadeout.mp4" width="280" autoplay loop muted playsinline></video>
 *With `blurOverridesOpacity`, the frosted layer fades away below radius 1 — no sharp flash on dismissal.*
 
 ---
