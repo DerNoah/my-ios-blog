@@ -8,17 +8,19 @@ saturation, grayscale, hue rotation, opacity) to a stripped-down backdrop view, 
 this script applies the equivalent operations with Pillow:
 
     01-original.png ... the source photo, no effect (the backdrop)
-    02-blur.png ....... blurRadius 6        (.blurredIn)
-    03-brightness.png . brightness +0.18    (additive)
-    04-contrast.png ... contrast 1.4
-    05-saturation.png . saturation 1.8
-    06-grayscale.png .. grayscale 0.85
-    07-hue.png ........ hueRotation 90 degrees
-    08-opacity.png .... a frosted card at opacity 0.75 over the sharp photo
-    09-frosted.png .... the composed frosted-glass card (blur + brightness + saturation)
-    10-blurin.gif ..... the implicit spring blur-in (blurRadius 0 -> 6)
-    11-scrub.gif ...... interactive scrub: fractionComplete 0 -> 1 -> 0
-    12-fadeout.gif .... blurOverridesOpacity dismissal (alpha = min(1, blur))
+    02-edgescroll.gif . the primary use case: frosted nav + tab bars pinned over
+                        scrolling content, blurring the live backdrop behind them
+    03-blur.png ....... blurRadius 6        (.blurredIn)
+    04-brightness.png . brightness +0.18    (additive)
+    05-contrast.png ... contrast 1.4
+    06-saturation.png . saturation 1.8
+    07-grayscale.png .. grayscale 0.85
+    08-hue.png ........ hueRotation 90 degrees
+    09-opacity.png .... a frosted card at opacity 0.75 over the sharp photo
+    10-frosted.png .... the composed frosted-glass card (blur + brightness + saturation)
+    11-blurin.gif ..... the implicit spring blur-in (blurRadius 0 -> 6)
+    12-scrub.gif ...... interactive scrub: fractionComplete 0 -> 1 -> 0
+    13-fadeout.gif .... blurOverridesOpacity dismissal (alpha = min(1, blur))
 
 This is the pure-Pillow generator (no numpy) -- it runs anywhere Pillow is
 installed. A higher-fidelity Core Image companion lives alongside it in
@@ -63,6 +65,14 @@ GIF_FADE = dict(hold_start=3, trans=18, hold_end=8, ms=45)
 
 # Interactive-scrub snapshot (the values captured at beginInteractive()).
 SCRUB_BLUR, SCRUB_BRIGHT, SCRUB_SAT = 6.0, 0.15, 1.6
+
+# Edge-scroll demo: a frosted nav bar + tab bar pinned over scrolling content.
+FEED_H = 1180                            # tall content the viewport scrolls through
+TOPBAR_H, BOTBAR_H = 104, 88             # pinned bar heights
+EDGE_BLUR, EDGE_BRIGHT = 14.0, 0.06      # the bars' live backdrop blur
+SCROLL_STEPS, SCROLL_HOLD, EDGE_MS = 18, 3, 55
+CARD_PALETTE = [(255, 95, 86), (255, 159, 67), (72, 199, 142),
+                (45, 152, 229), (155, 89, 217), (255, 107, 158)]
 
 
 # --- Helpers ------------------------------------------------------------------
@@ -224,6 +234,75 @@ def make_fadeout_gif(photo, path):
     save_gif(frames, path, cfg["ms"])
 
 
+# --- Edge-scroll demo: the primary use case (a variable blur pinned to edges) -
+def text_shadowed(d, pos, text, font, fill):
+    x, y = pos
+    d.text((x + 1, y + 1), text, font=font, fill=(0, 0, 0, 110))
+    d.text((x, y), text, font=font, fill=fill)
+
+
+def build_feed(photo):
+    """A tall scrollable 'screen': the photo as a hero, then a column of cards."""
+    feed = Image.new("RGB", (W, FEED_H), (244, 245, 248))
+    feed.paste(photo, (0, 0))
+    d = ImageDraw.Draw(feed, "RGBA")
+    title_font, sub_font = load_font(15), load_font(11)
+    y, i = 496, 0
+    while y < FEED_H - 116:
+        col = CARD_PALETTE[i % len(CARD_PALETTE)]
+        d.rounded_rectangle([16, y, W - 16, y + 96], 18, fill=col)
+        d.ellipse([30, y + 24, 78, y + 72], fill=(255, 255, 255, 70))
+        d.text((92, y + 26), f"Item {i + 1}", font=title_font, fill=(255, 255, 255, 240))
+        d.text((92, y + 50), "Tap to open this card", font=sub_font, fill=(255, 255, 255, 205))
+        y += 112
+        i += 1
+    return feed
+
+
+def edge_frame(feed, off, title_font, tab_font):
+    """One scroll frame: blur only the two pinned bar strips of the live viewport."""
+    view = feed.crop((0, int(round(off)), W, int(round(off)) + H)).convert("RGB")
+    blurred = fx_brightness(fx_blur(view, EDGE_BLUR), EDGE_BRIGHT)
+
+    out = view.copy()
+    out.paste(blurred.crop((0, 0, W, TOPBAR_H)), (0, 0))                  # top nav bar
+    out.paste(blurred.crop((0, H - BOTBAR_H, W, H)), (0, H - BOTBAR_H))   # bottom tab bar
+
+    d = ImageDraw.Draw(out, "RGBA")
+    d.rectangle([0, 0, W, TOPBAR_H], fill=(255, 255, 255, 30))            # frosted material wash
+    d.rectangle([0, H - BOTBAR_H, W, H], fill=(255, 255, 255, 30))
+    d.line([(0, TOPBAR_H), (W, TOPBAR_H)], fill=(0, 0, 0, 45))            # hairline separators
+    d.line([(0, H - BOTBAR_H), (W, H - BOTBAR_H)], fill=(0, 0, 0, 45))
+
+    text_shadowed(d, (16, 16), "9:41", tab_font, (255, 255, 255, 240))
+    title = "Gallery"
+    text_shadowed(d, ((W - d.textlength(title, font=title_font)) / 2, 58), title,
+                  title_font, (255, 255, 255, 245))
+
+    tabs = ["Home", "Search", "Saved", "Profile"]
+    for j, t in enumerate(tabs):
+        cx = (j + 0.5) * W / len(tabs)
+        d.ellipse([cx - 6, H - BOTBAR_H + 20, cx + 6, H - BOTBAR_H + 32], fill=(255, 255, 255, 235))
+        text_shadowed(d, (cx - d.textlength(t, font=tab_font) / 2, H - BOTBAR_H + 36), t,
+                      tab_font, (255, 255, 255, 230))
+    return out
+
+
+def make_edge_scroll_gif(photo, path):
+    """The headline use case: pinned frosted bars whose blur tracks scrolling content."""
+    feed = build_feed(photo)
+    max_off = FEED_H - H
+    title_font, tab_font = load_font(16), load_font(11)
+
+    offsets = [max_off * smoothstep(k / SCROLL_STEPS) for k in range(SCROLL_STEPS + 1)]
+    offsets += [max_off] * SCROLL_HOLD
+    offsets += [max_off * smoothstep(1 - k / SCROLL_STEPS) for k in range(1, SCROLL_STEPS + 1)]
+    offsets += [0.0] * SCROLL_HOLD
+
+    frames = [edge_frame(feed, off, title_font, tab_font) for off in offsets]
+    save_gif(frames, path, EDGE_MS)
+
+
 # --- Driver -------------------------------------------------------------------
 def save_png(img, out_dir, name):
     assert img.size == (W, H), f"{name} is {img.size}, expected {(W, H)}"
@@ -242,21 +321,24 @@ def main():
     photo = Image.open(input_path).convert("RGB").resize((W, H), Image.LANCZOS)
     print(f"source: {input_path} -> {photo.size}")
 
-    # Stills -------------------------------------------------------------------
+    # Baseline + the primary use case ------------------------------------------
     save_png(photo, out_dir, "01-original.png")
-    save_png(fx_blur(photo), out_dir, "02-blur.png")
-    save_png(fx_brightness(photo), out_dir, "03-brightness.png")
-    save_png(fx_contrast(photo), out_dir, "04-contrast.png")
-    save_png(fx_saturation(photo), out_dir, "05-saturation.png")
-    save_png(fx_grayscale(photo), out_dir, "06-grayscale.png")
-    save_png(fx_hue(photo), out_dir, "07-hue.png")
-    save_png(make_card(photo, opacity=OPACITY), out_dir, "08-opacity.png")
-    save_png(make_card(photo), out_dir, "09-frosted.png")
+    make_edge_scroll_gif(photo, os.path.join(out_dir, "02-edgescroll.gif"))
+
+    # The seven effects --------------------------------------------------------
+    save_png(fx_blur(photo), out_dir, "03-blur.png")
+    save_png(fx_brightness(photo), out_dir, "04-brightness.png")
+    save_png(fx_contrast(photo), out_dir, "05-contrast.png")
+    save_png(fx_saturation(photo), out_dir, "06-saturation.png")
+    save_png(fx_grayscale(photo), out_dir, "07-grayscale.png")
+    save_png(fx_hue(photo), out_dir, "08-hue.png")
+    save_png(make_card(photo, opacity=OPACITY), out_dir, "09-opacity.png")
+    save_png(make_card(photo), out_dir, "10-frosted.png")
 
     # Animations ---------------------------------------------------------------
-    make_blurin_gif(photo, os.path.join(out_dir, "10-blurin.gif"))
-    make_scrub_gif(photo, os.path.join(out_dir, "11-scrub.gif"))
-    make_fadeout_gif(photo, os.path.join(out_dir, "12-fadeout.gif"))
+    make_blurin_gif(photo, os.path.join(out_dir, "11-blurin.gif"))
+    make_scrub_gif(photo, os.path.join(out_dir, "12-scrub.gif"))
+    make_fadeout_gif(photo, os.path.join(out_dir, "13-fadeout.gif"))
 
     print("Done.")
 
