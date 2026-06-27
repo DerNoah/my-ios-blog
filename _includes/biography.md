@@ -1,10 +1,10 @@
 # Hi, I’m Noah 👋
 
-I’m an iOS Software Engineer from Germany with a passion for building scalable mobile applications, developer tooling, and software architecture.
+I’m an iOS Software Engineer from Germany who enjoys building applications that feel as good as they look. I’m passionate about creating software that combines thoughtful architecture with polished user experiences—apps that are visually refined, responsive, stable, and a pleasure to use.
 
-Over the past few years, I’ve worked on everything from consumer applications and startup products to large-scale enterprise software used by millions of users. My daily work focuses on creating maintainable architectures, improving developer experience, and building infrastructure that enables other engineers to move faster.
+Over the past few years, I’ve worked on everything from startup products to large-scale enterprise applications used by millions of users. My work spans software architecture, developer tooling, infrastructure, and user experience, with a strong focus on maintainability without compromising quality or design.
 
-While iOS development is my primary expertise, I’m equally interested in the systems behind the app—modularization, navigation, rendering performance, build tooling, CI/CD, local AI workflows, and the small engineering decisions that have a big impact on long-term maintainability.
+For me, great software is more than clean code. It’s about smooth animations, meaningful motion design, consistent interactions, excellent performance, and the countless small details that make an application feel intuitive and premium.long-term maintainability.
 
 ## Why this blog?
 
@@ -24,11 +24,13 @@ Rather than publishing beginner tutorials, I prefer writing about topics that em
 
 Whenever possible, every article is based on practical experience, measurements, and real-world implementations—not just theoretical examples.
 
-## My philosophy
+## My Philosophy
 
-I believe good software isn’t defined by how clever the code looks, but by how easy it is to understand, maintain, and evolve.
+I believe exceptional software is built where engineering meets design.
 
-Technology changes constantly, but clean architecture, thoughtful abstractions, and curiosity remain valuable throughout an engineer’s career.
+A great application should not only be maintainable and scalable—it should also feel effortless to use. Fluid animations, meaningful motion, responsive interfaces, and rock-solid reliability are not finishing touches; they’re essential parts of the user experience.
+
+Technology evolves quickly, but attention to detail, thoughtful architecture, and craftsmanship never go out of style. Those are the principles that guide both my work and the articles I write.
 
 ## Outside of work
 
