@@ -72,12 +72,16 @@ SCRUB_BLUR, SCRUB_BRIGHT, SCRUB_SAT = 6.0, 0.15, 1.6
 # CIFilter.maskedVariableBlur. The blur is masked by a gradient (never clipped), and
 # the scrolling content is itself masked to clear at the edges, dissolving into a
 # blurred wallpaper behind it. The centre stays sharp and fully opaque.
+#
+# The bands are sized to the iPhone safe-area insets (top larger than bottom), and the
+# gradient transition begins at HALF the band height: the outer half (nearest the screen
+# edge) is full blur + fully clear, the fade happens over the inner half.
 FEED_H = 1180                            # tall content the viewport scrolls through
-CONTENT_FADE = 150                       # how far the content fades to clear from each edge
-BLUR_FADE = 200                          # how far the variable blur reaches in from each edge
-EDGE_BLUR = 22.0                         # peak blur at the very edge
+TOP_SAFE, BOT_SAFE = 52, 34              # edge band heights ~ iPhone safe-area insets
+EDGE_BLUR = 8.0                          # the variable blur radius
 WALL_BLUR, WALL_DIM = 32.0, -0.10        # the static blurred + dimmed wallpaper
-SCROLL_STEPS, SCROLL_HOLD, EDGE_MS = 18, 3, 55
+SCROLL_STEPS, SCROLL_HOLD, EDGE_MS = 24, 3, 70   # more frames + longer hold = a slower, smoother scroll
+                                                 # (GIF delays are centiseconds, so keep EDGE_MS a multiple of 10)
 CARD_PALETTE = [(255, 95, 86), (255, 159, 67), (72, 199, 142),
                 (45, 152, 229), (155, 89, 217), (255, 107, 158)]
 
@@ -265,14 +269,24 @@ def build_feed():
     return feed
 
 
-def vertical_edge_mask(fade):
-    """An 'L' gradient: 0 at the very top/bottom edges, ramping to 255 by `fade` px in,
-    255 across the middle. Used both to fade the content out and to reveal the blur."""
+def _edge_ramp(dist, safe):
+    """A soft gradient across the *whole* band: 0 (full effect) at the screen edge,
+    smoothstep up to 1 (no effect) at the blur view's inner edge, 1 beyond. The fade
+    begins at the blur view's edge and completes at the screen edge — no flat plateau."""
+    if dist >= safe:
+        return 1.0
+    return smoothstep(dist / safe)
+
+
+def content_edge_mask():
+    """An 'L' mask that is 0 (clear) within each safe-area band and 255 (opaque) across
+    the centre, with the fade confined to the inner half of each band. Top and bottom
+    bands are sized independently. Invert it to reveal the blur at the edges."""
     m = Image.new("L", (W, H), 255)
     d = ImageDraw.Draw(m)
     for y in range(H):
-        edge = min(y, H - 1 - y)
-        d.line([(0, y), (W, y)], fill=int(255 * smoothstep(edge / fade)))
+        v = min(_edge_ramp(y, TOP_SAFE), _edge_ramp(H - 1 - y, BOT_SAFE))
+        d.line([(0, y), (W, y)], fill=int(255 * v))
     return m
 
 
@@ -293,8 +307,8 @@ def make_edge_scroll_gif(photo, path):
     edges while the content scrolls behind it (a CIFilter.maskedVariableBlur stand-in)."""
     feed = build_feed()
     wallpaper = make_wallpaper(photo)
-    content_mask = vertical_edge_mask(CONTENT_FADE)
-    blur_reveal = ImageChops.invert(vertical_edge_mask(BLUR_FADE))     # 255 at edges, 0 centre
+    content_mask = content_edge_mask()
+    blur_reveal = ImageChops.invert(content_mask)                      # 255 at edges, 0 centre
     max_off = FEED_H - H
 
     offsets = [max_off * smoothstep(k / SCROLL_STEPS) for k in range(SCROLL_STEPS + 1)]

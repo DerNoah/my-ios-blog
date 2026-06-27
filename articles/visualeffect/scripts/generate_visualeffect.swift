@@ -61,11 +61,13 @@ let scrubBlur = 6.0, scrubBright = 0.15, scrubSat = 1.6
 
 // Edge-scroll demo: a variable blur masked by a gradient (a CIFilter.maskedVariableBlur
 // stand-in), with the scrolling content faded to clear at the edges over a blurred wallpaper.
+// The bands are sized to the iPhone safe area (top larger than bottom) and the fade begins
+// at half the band height: full blur + fully clear over the outer half, fading over the inner half.
 let feedH = 1180
-let contentFade = 150.0, blurFade = 200.0    // edge fade distances (content / blur reveal)
-let edgeBlur = 22.0
+let topSafe = 52.0, botSafe = 34.0           // edge band heights ~ iPhone safe-area insets
+let edgeBlur = 8.0                           // the variable blur radius
 let wallBlur = 32.0, wallDim = -0.10         // the static blurred + dimmed wallpaper
-let scrollSteps = 18, scrollHold = 3, edgeMS = 0.055
+let scrollSteps = 24, scrollHold = 3, edgeMS = 0.07   // more frames + longer hold = a slower scroll
 let cardPalette: [(CGFloat, CGFloat, CGFloat)] = [
     (255, 95, 86), (255, 159, 67), (72, 199, 142),
     (45, 152, 229), (155, 89, 217), (255, 107, 158),
@@ -304,13 +306,22 @@ func buildFeed() -> CGImage {
     return ctx.makeImage()!
 }
 
-// A grayscale gradient: 0 at the very top/bottom edges → 1 by `fade` px in, 1 across the
-// middle (symmetric, so its orientation is moot). `inverted` flips it for the blur reveal.
-func verticalEdgeMask(_ fade: Double, inverted: Bool) -> CGImage {
+// A soft gradient across the *whole* band: 0 (full effect) at the screen edge, smoothstep
+// to 1 (no effect) at the blur view's inner edge — the fade begins at the blur view's edge
+// and completes at the screen edge, with no flat plateau.
+func edgeRamp(_ dist: Double, _ safe: Double) -> Double {
+    if dist >= safe { return 1 }
+    return smoothstep(dist / safe)
+}
+
+// A grayscale mask: 0 (clear) within each safe-area band, 1 (opaque) across the centre, the
+// fade confined to the inner half of each band. Top and bottom bands are sized independently.
+// (CGBitmapContext row 0 is the visible top, i.e. user-space y = H-1.) `inverted` reveals the blur.
+func safeAreaMask(inverted: Bool) -> CGImage {
     let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
                         space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
     for y in 0..<H {
-        var v = smoothstep(Double(min(y, H - 1 - y)) / fade)
+        var v = min(edgeRamp(Double(H - 1 - y), topSafe), edgeRamp(Double(y), botSafe))
         if inverted { v = 1 - v }
         ctx.setFillColor(gray: CGFloat(v), alpha: 1)
         ctx.fill(CGRect(x: 0, y: y, width: W, height: 1))
@@ -348,8 +359,8 @@ func edgeFrame(_ feed: CGImage, off: Int, wallpaper: CGImage,
 func makeEdgeScrollGIF(_ photo: CGImage, to path: String) {
     let feed = buildFeed()
     let wallpaper = makeWallpaper(photo)
-    let contentMask = verticalEdgeMask(contentFade, inverted: false)   // 1 centre, 0 edges
-    let blurReveal = verticalEdgeMask(blurFade, inverted: true)        // 1 edges, 0 centre
+    let contentMask = safeAreaMask(inverted: false)   // 1 centre, 0 edges
+    let blurReveal = safeAreaMask(inverted: true)     // 1 edges, 0 centre
     let maxOff = feedH - H
     func at(_ k: Int, reversed: Bool) -> Int {
         let t = reversed ? 1 - Double(k) / Double(scrollSteps) : Double(k) / Double(scrollSteps)
