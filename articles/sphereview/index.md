@@ -15,7 +15,7 @@ date: 2026-06-27
 
 SphereView arranges any `UIView`s on the surface of a virtual sphere and makes the whole thing interactive: drag to spin it, flick it for momentum, pinch to zoom, and the frontmost item snaps into focus. The even, no-clumping distribution comes from a **Fibonacci lattice**; the 3D look is faked with nothing more than scale, alpha, and `zPosition`; and the rotation is a single quaternion, so it never gimbal-locks.
 
-It's open-sourced at [github.com/noahplutzer/swift-sphere-view](https://github.com/noahplutzer/swift-sphere-view) (iOS 16+, Swift 6).
+It's open-sourced at [github.com/DerNoah/swift-sphere-view](https://github.com/DerNoah/swift-sphere-view) (iOS 16+, Swift 6).
 
 ![A sphere of colorful icon chips](01-intro.png){:width="280"}
 *A sphere of icon chips — front items are large and opaque, back items shrink and fade.*
@@ -27,7 +27,7 @@ Install it with Swift Package Manager:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/noahplutzer/swift-sphere-view", from: "1.0.0")
+    .package(url: "https://github.com/DerNoah/swift-sphere-view", from: "1.0.0")
 ]
 ```
 
@@ -228,4 +228,4 @@ The snap is a 20-step interpolation between the current and target orientation (
 | Observe `onFrontItemChanged`, don't poll | It only fires when the frontmost item actually changes |
 | Toggle `isScrollEnabled` / `isPinchEnabled` | Disable a gesture when you want a display-only or zoom-only sphere |
 
-The full source is a single, dependency-free file on GitHub: [github.com/noahplutzer/swift-sphere-view](https://github.com/noahplutzer/swift-sphere-view).
+The full source is a single, dependency-free file on GitHub: [github.com/DerNoah/swift-sphere-view](https://github.com/DerNoah/swift-sphere-view).
