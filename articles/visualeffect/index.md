@@ -82,7 +82,7 @@ The effect is two gradient masks, both confined to the edges:
 - **The variable blur** — a `VisualEffectView` (or `VisualEffectViewRepresentable`) pinned to the edge, masked by a gradient so the blur is full at the very edge and gone toward the centre. This is the `CIFilter.maskedVariableBlur` replacement. Use the backdrop view here, *not* `.visualEffects(_:)`: the backdrop view blurs whatever is *behind* it (the scrolling content), whereas `.visualEffects(_:)` blurs a view's *own* content.
 - **The content edge fade** — a `LinearGradient` mask on the scroll content itself, so its top and bottom **edges become clear** while the centre stays fully visible. The content dissolves into whatever sits behind it (here, a blurred wallpaper).
 
-Keep `clippedBlur` at its default `false` and give the effect view negative `blurInsets` on the pinned edge, so the blurred surface bleeds past the bounds and reads solid right up to the notch / home indicator — no darkened rim.
+Size each band to the matching safe-area inset (top larger than bottom), and let the gradient span the *whole* band — the fade begins at the blur view's inner edge (where it meets the content) and completes at the screen edge, so there's no hard plateau, just one soft ramp. Keep the blur modest — a `blurRadius` of `8` gives a clearly frosted edge while the dissolve carries the rest. And keep `clippedBlur` at its default `false` with negative `blurInsets` on the pinned edge, so the blurred surface bleeds past the bounds and reads solid right up to the notch / home indicator — no darkened rim.
 
 **SwiftUI** — a wallpaper, the masked scroll content, and a gradient-masked blur on each edge:
 
@@ -95,29 +95,29 @@ ZStack {
         .overlay(Color.black.opacity(0.1))
         .ignoresSafeArea()
 
-    // 2. The scroll content, faded to clear at the top and bottom edges.
+    // 2. The scroll content, faded to clear across each safe-area band — clear at the
+    //    screen edge, fully opaque at the blur view's inner edge (one ramp, no plateau).
     ScrollView {
         LazyVStack(spacing: 12) { /* your cards */ }
     }
     .mask(
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0.00),   // top edge: clear
-                .init(color: .black, location: 0.14),
-                .init(color: .black, location: 0.86),
-                .init(color: .clear, location: 1.00),    // bottom edge: clear
-            ],
-            startPoint: .top, endPoint: .bottom
-        )
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: 54)               // top band: clear at the screen edge → opaque inward
+            Color.black                          // centre — fully visible
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 34)               // bottom band: opaque inward → clear at the screen edge
+        }
     )
 
-    // 3. The variable blur — a gradient-masked backdrop view on each edge.
+    // 3. The variable blur — a gradient-masked backdrop view on each edge, the gradient
+    //    spanning the whole band: full blur at the screen edge, fading to none at the inner edge.
     VStack {
         VisualEffectViewRepresentable(
             blurInsets: UIEdgeInsets(top: -40, left: -40, bottom: 0, right: -40),
-            initialValues: .blurredIn
+            initialValues: VisualEffectValues(blurRadius: 8)
         )
-        .frame(height: 150)
+        .frame(height: 54)                       // ≈ the top safe-area inset
         .mask(LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom))
         .ignoresSafeArea(edges: .top)
 
@@ -125,9 +125,9 @@ ZStack {
 
         VisualEffectViewRepresentable(
             blurInsets: UIEdgeInsets(top: 0, left: -40, bottom: -40, right: -40),
-            initialValues: .blurredIn
+            initialValues: VisualEffectValues(blurRadius: 8)
         )
-        .frame(height: 130)
+        .frame(height: 34)                       // ≈ the bottom safe-area inset
         .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
         .ignoresSafeArea(edges: .bottom)
     }

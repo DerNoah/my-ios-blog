@@ -1,6 +1,6 @@
 title: My iOS Journey
 description: My iOS blog
-theme: minima
+theme: jekyll-theme-cayman
 url: "http://www.noahmilan.com"
 markdown: kramdown
 

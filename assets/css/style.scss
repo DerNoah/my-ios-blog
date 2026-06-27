@@ -1,0 +1,9 @@
+---
+---
+@import "{{ site.theme }}";
+
+.page-header .project-name a,
+.page-header .project-name a:hover {
+  color: #fff;
+  text-decoration: none;
+}
