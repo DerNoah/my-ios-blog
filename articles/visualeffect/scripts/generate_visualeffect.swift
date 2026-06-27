@@ -7,7 +7,8 @@
 //  SwiftUI's `.visualEffect { ... }` chain in swift-visual-effect.
 //
 //      01-original.png ... the source photo, no effect
-//      02-edgescroll.gif . primary use case: frosted nav + tab bars pinned over scrolling content
+//      02-edgescroll.gif . primary use case: a variable blur masked to the edges over scrolling
+//                          content (a CIFilter.maskedVariableBlur replacement)
 //      03-blur.png ....... CIGaussianBlur  radius 6
 //      04-brightness.png . CIColorControls brightness +0.18 (additive)
 //      05-contrast.png ... CIColorControls contrast 1.4
@@ -58,10 +59,12 @@ let cardRadius: CGFloat = 28
 
 let scrubBlur = 6.0, scrubBright = 0.15, scrubSat = 1.6
 
-// Edge-scroll demo: a frosted nav bar + tab bar pinned over scrolling content.
+// Edge-scroll demo: a variable blur masked by a gradient (a CIFilter.maskedVariableBlur
+// stand-in), with the scrolling content faded to clear at the edges over a blurred wallpaper.
 let feedH = 1180
-let topBarH = 104, botBarH = 88
-let edgeBlur = 14.0, edgeBright = 0.06
+let contentFade = 150.0, blurFade = 200.0    // edge fade distances (content / blur reveal)
+let edgeBlur = 22.0
+let wallBlur = 32.0, wallDim = -0.10         // the static blurred + dimmed wallpaper
 let scrollSteps = 18, scrollHold = 3, edgeMS = 0.055
 let cardPalette: [(CGFloat, CGFloat, CGFloat)] = [
     (255, 95, 86), (255, 159, 67), (72, 199, 142),
@@ -276,34 +279,17 @@ func makeFadeOutGIF(_ photo: CGImage, to path: String) {
     writeGIF(frames, frameDelay: 0.045, to: path)
 }
 
-// MARK: - Edge-scroll demo (the primary use case: a variable blur pinned to edges)
+// MARK: - Edge-scroll demo (the primary use case: a CIFilter.maskedVariableBlur stand-in)
 
-func drawText(_ ctx: CGContext, _ text: String, x: CGFloat, baseline: CGFloat,
-              size: CGFloat, alpha: CGFloat = 0.95, center: Bool = false) {
-    let font = CTFontCreateWithName("Helvetica" as CFString, size, nil)
-    func line(_ color: CGColor) -> CTLine {
-        let attrs: [CFString: Any] = [kCTFontAttributeName: font, kCTForegroundColorAttributeName: color]
-        return CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text as CFString, attrs as CFDictionary)!)
-    }
-    let main = line(CGColor(red: 1, green: 1, blue: 1, alpha: alpha))
-    var ox = x
-    if center { ox = x - CGFloat(CTLineGetTypographicBounds(main, nil, nil, nil)) / 2 }
-    ctx.textPosition = CGPoint(x: ox + 1, y: baseline - 1)
-    CTLineDraw(line(CGColor(red: 0, green: 0, blue: 0, alpha: 0.45)), ctx)
-    ctx.textPosition = CGPoint(x: ox, y: baseline)
-    CTLineDraw(main, ctx)
+func makeWallpaper(_ photo: CGImage) -> CGImage {
+    fxBrightness(fxBlur(photo, wallBlur), wallDim)   // static blurred + dimmed backdrop
 }
 
-// A tall scrollable "screen": the photo as a hero, then a column of cards.
-// Drawn in a bottom-left context, so top-down y is converted with (feedH - y - height).
-func buildFeed(_ photo: CGImage) -> CGImage {
+// Cards floating on a transparent canvas, so the wallpaper shows through gaps and faded edges.
+func buildFeed() -> CGImage {
     let ctx = CGContext(data: nil, width: W, height: feedH, bitsPerComponent: 8, bytesPerRow: 0,
                         space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    ctx.setFillColor(red: 244 / 255, green: 245 / 255, blue: 248 / 255, alpha: 1)
-    ctx.fill(CGRect(x: 0, y: 0, width: W, height: feedH))
-    ctx.draw(photo, in: CGRect(x: 0, y: feedH - 480, width: W, height: 480))   // hero at the top
-
-    var ty = 496, i = 0
+    var ty = 20, i = 0
     while ty < feedH - 116 {
         let col = cardPalette[i % cardPalette.count]
         let cy = feedH - ty - 96
@@ -318,40 +304,52 @@ func buildFeed(_ photo: CGImage) -> CGImage {
     return ctx.makeImage()!
 }
 
-func edgeFrame(_ feed: CGImage, off: Int) -> CGImage {
-    let viewport = feed.cropping(to: CGRect(x: 0, y: off, width: W, height: H))!
-    let blurred = fxBrightness(fxBlur(viewport, edgeBlur), edgeBright)
-
+// A grayscale gradient: 0 at the very top/bottom edges → 1 by `fade` px in, 1 across the
+// middle (symmetric, so its orientation is moot). `inverted` flips it for the blur reveal.
+func verticalEdgeMask(_ fade: Double, inverted: Bool) -> CGImage {
     let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
-                        space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    ctx.draw(viewport, in: workingRect)
-    // Blur only the two pinned strips; top of content -> visible top (high y), bottom -> low y.
-    let topStrip = blurred.cropping(to: CGRect(x: 0, y: 0, width: W, height: topBarH))!
-    ctx.draw(topStrip, in: CGRect(x: 0, y: H - topBarH, width: W, height: topBarH))
-    let botStrip = blurred.cropping(to: CGRect(x: 0, y: H - botBarH, width: W, height: botBarH))!
-    ctx.draw(botStrip, in: CGRect(x: 0, y: 0, width: W, height: botBarH))
-
-    ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.12)                 // frosted material wash
-    ctx.fill(CGRect(x: 0, y: H - topBarH, width: W, height: topBarH))
-    ctx.fill(CGRect(x: 0, y: 0, width: W, height: botBarH))
-    ctx.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.18)                 // hairline separators
-    ctx.fill(CGRect(x: 0, y: H - topBarH, width: W, height: 1))
-    ctx.fill(CGRect(x: 0, y: botBarH, width: W, height: 1))
-
-    drawText(ctx, "9:41", x: 16, baseline: CGFloat(H) - 28, size: 13)
-    drawText(ctx, "Gallery", x: CGFloat(W) / 2, baseline: CGFloat(H) - 72, size: 16, center: true)
-    let tabs = ["Home", "Search", "Saved", "Profile"]
-    for (j, t) in tabs.enumerated() {
-        let cx = (CGFloat(j) + 0.5) * CGFloat(W) / CGFloat(tabs.count)
-        ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.92)
-        ctx.fillEllipse(in: CGRect(x: cx - 6, y: CGFloat(botBarH) - 30, width: 12, height: 12))
-        drawText(ctx, t, x: cx, baseline: 14, size: 11, center: true)
+                        space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+    for y in 0..<H {
+        var v = smoothstep(Double(min(y, H - 1 - y)) / fade)
+        if inverted { v = 1 - v }
+        ctx.setFillColor(gray: CGFloat(v), alpha: 1)
+        ctx.fill(CGRect(x: 0, y: y, width: W, height: 1))
     }
     return ctx.makeImage()!
 }
 
+func edgeFrame(_ feed: CGImage, off: Int, wallpaper: CGImage,
+               contentMask: CGImage, blurReveal: CGImage) -> CGImage {
+    let viewport = feed.cropping(to: CGRect(x: 0, y: off, width: W, height: H))!
+
+    // Pass 1: fade the content to clear at the edges (mask clip) over the wallpaper.
+    let c1 = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+                       space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    c1.draw(wallpaper, in: workingRect)
+    c1.saveGState()
+    c1.clip(to: workingRect, mask: contentMask)
+    c1.draw(viewport, in: workingRect)
+    c1.restoreGState()
+    let comp = c1.makeImage()!
+
+    // Pass 2: reveal a Gaussian blur only through the edge gradient — a mask-driven
+    // variable blur, exactly what CIFilter.maskedVariableBlur produces.
+    let blurred = fxBlur(comp, edgeBlur)
+    let c2 = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+                       space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    c2.draw(comp, in: workingRect)
+    c2.saveGState()
+    c2.clip(to: workingRect, mask: blurReveal)
+    c2.draw(blurred, in: workingRect)
+    c2.restoreGState()
+    return c2.makeImage()!
+}
+
 func makeEdgeScrollGIF(_ photo: CGImage, to path: String) {
-    let feed = buildFeed(photo)
+    let feed = buildFeed()
+    let wallpaper = makeWallpaper(photo)
+    let contentMask = verticalEdgeMask(contentFade, inverted: false)   // 1 centre, 0 edges
+    let blurReveal = verticalEdgeMask(blurFade, inverted: true)        // 1 edges, 0 centre
     let maxOff = feedH - H
     func at(_ k: Int, reversed: Bool) -> Int {
         let t = reversed ? 1 - Double(k) / Double(scrollSteps) : Double(k) / Double(scrollSteps)
@@ -361,7 +359,9 @@ func makeEdgeScrollGIF(_ photo: CGImage, to path: String) {
     offsets += Array(repeating: maxOff, count: scrollHold)
     offsets += (1...scrollSteps).map { at($0, reversed: true) }
     offsets += Array(repeating: 0, count: scrollHold)
-    writeGIF(offsets.map { edgeFrame(feed, off: $0) }, frameDelay: edgeMS, to: path)
+    writeGIF(offsets.map {
+        edgeFrame(feed, off: $0, wallpaper: wallpaper, contentMask: contentMask, blurReveal: blurReveal)
+    }, frameDelay: edgeMS, to: path)
 }
 
 // MARK: - Main
