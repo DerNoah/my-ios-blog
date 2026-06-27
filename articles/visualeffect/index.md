@@ -19,7 +19,7 @@ date: 2026-06-27
 
 Its headline use is a *variable* blur along a scrolling edge — a progressive blur that's strong at the screen edge and fades to nothing as content moves behind it, the effect you'd otherwise build with `CIFilter.maskedVariableBlur` — which we'll build first.
 
-It's open-sourced at [github.com/noahplutzer/swift-visual-effect](https://github.com/noahplutzer/swift-visual-effect) (iOS 17+, Swift 6, MIT).
+It's open-sourced at [github.com/DerNoah/swift-visual-effect](https://github.com/DerNoah/swift-visual-effect) (iOS 17+, Swift 6, MIT).
 
 ![The source photo, with no effect applied](01-original.png){:width="280"}
 *The backdrop we'll apply every effect to throughout this guide.*
@@ -28,7 +28,7 @@ Install it with Swift Package Manager:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/noahplutzer/swift-visual-effect", from: "1.0.0")
+    .package(url: "https://github.com/DerNoah/swift-visual-effect", from: "1.0.0")
 ]
 ```
 
@@ -429,4 +429,4 @@ effectView.effectValues = VisualEffectValues(blurRadius: 6, grayscale: 0.4, hueR
 | `pauseInteractive()` between gesture and animation | Commits the current frame so `finishInteractive()`/`cancelInteractive()` start from where the finger left off |
 | Tune `animationDuration`, not the curve | One knob controls the implicit spring's duration; the bounce is fixed at a gentle `0.1` |
 
-The full source — and a deeper look at how the SwiftUI layer is wired to the stripped-down backdrop view — is on GitHub: [github.com/noahplutzer/swift-visual-effect](https://github.com/noahplutzer/swift-visual-effect).
+The full source — and a deeper look at how the SwiftUI layer is wired to the stripped-down backdrop view — is on GitHub: [github.com/DerNoah/swift-visual-effect](https://github.com/DerNoah/swift-visual-effect).
