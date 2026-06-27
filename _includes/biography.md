@@ -4,7 +4,7 @@ I’m an iOS Software Engineer from Germany who enjoys building applications tha
 
 Over the past few years, I’ve worked on everything from startup products to large-scale enterprise applications used by millions of users. My work spans software architecture, developer tooling, infrastructure, and user experience, with a strong focus on maintainability without compromising quality or design.
 
-For me, great software is more than clean code. It’s about smooth animations, meaningful motion design, consistent interactions, excellent performance, and the countless small details that make an application feel intuitive and premium.long-term maintainability.
+For me, great software is more than clean code. It’s about smooth animations, meaningful motion design, consistent interactions, excellent performance, and the countless small details that make an application feel intuitive and premium.
 
 ## Why this blog?
 
@@ -34,7 +34,7 @@ Technology evolves quickly, but attention to detail, thoughtful architecture, an
 
 ## Outside of work
 
-Beyond writing code, I enjoy exploring graphics programming, 3D rendering, experimenting with local language models, and building tools that automate repetitive tasks. I also enjoy breaking complex technical concepts down into something easier to understand—which is exactly what this blog is about.
+Beyond writing code, I enjoy exploring graphics programming, 3D rendering, experimenting with local language models and building tools that automate repetitive tasks. I also enjoy breaking complex technical concepts down into something easier to understand—which is exactly what this blog is about.
 
 If you find an article helpful, have questions, or simply enjoy discussing software engineering, feel free to reach out.
 
