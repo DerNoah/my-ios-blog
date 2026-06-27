@@ -8,8 +8,9 @@ saturation, grayscale, hue rotation, opacity) to a stripped-down backdrop view, 
 this script applies the equivalent operations with Pillow:
 
     01-original.png ... the source photo, no effect (the backdrop)
-    02-edgescroll.gif . the primary use case: frosted nav + tab bars pinned over
-                        scrolling content, blurring the live backdrop behind them
+    02-edgescroll.gif . the primary use case: a variable blur whose fade stays pinned
+                        to the screen edges as content scrolls — a CIFilter.maskedVariableBlur
+                        replacement, with the content also masked to clear at the edges
     03-blur.png ....... blurRadius 6        (.blurredIn)
     04-brightness.png . brightness +0.18    (additive)
     05-contrast.png ... contrast 1.4
@@ -38,7 +39,7 @@ import math
 import os
 import sys
 
-from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 # Article parameters -----------------------------------------------------------
 W, H = 320, 480                          # canvas size (2:3, matching the blurhash article)
@@ -66,10 +67,16 @@ GIF_FADE = dict(hold_start=3, trans=18, hold_end=8, ms=45)
 # Interactive-scrub snapshot (the values captured at beginInteractive()).
 SCRUB_BLUR, SCRUB_BRIGHT, SCRUB_SAT = 6.0, 0.15, 1.6
 
-# Edge-scroll demo: a frosted nav bar + tab bar pinned over scrolling content.
+# Edge-scroll demo: a *variable* (progressive) blur that fades along the top and
+# bottom edges as content scrolls behind it — what you'd otherwise build with
+# CIFilter.maskedVariableBlur. The blur is masked by a gradient (never clipped), and
+# the scrolling content is itself masked to clear at the edges, dissolving into a
+# blurred wallpaper behind it. The centre stays sharp and fully opaque.
 FEED_H = 1180                            # tall content the viewport scrolls through
-TOPBAR_H, BOTBAR_H = 104, 88             # pinned bar heights
-EDGE_BLUR, EDGE_BRIGHT = 14.0, 0.06      # the bars' live backdrop blur
+CONTENT_FADE = 150                       # how far the content fades to clear from each edge
+BLUR_FADE = 200                          # how far the variable blur reaches in from each edge
+EDGE_BLUR = 22.0                         # peak blur at the very edge
+WALL_BLUR, WALL_DIM = 32.0, -0.10        # the static blurred + dimmed wallpaper
 SCROLL_STEPS, SCROLL_HOLD, EDGE_MS = 18, 3, 55
 CARD_PALETTE = [(255, 95, 86), (255, 159, 67), (72, 199, 142),
                 (45, 152, 229), (155, 89, 217), (255, 107, 158)]
@@ -234,72 +241,68 @@ def make_fadeout_gif(photo, path):
     save_gif(frames, path, cfg["ms"])
 
 
-# --- Edge-scroll demo: the primary use case (a variable blur pinned to edges) -
-def text_shadowed(d, pos, text, font, fill):
-    x, y = pos
-    d.text((x + 1, y + 1), text, font=font, fill=(0, 0, 0, 110))
-    d.text((x, y), text, font=font, fill=fill)
+# --- Edge-scroll demo: the primary use case (a CIFilter.maskedVariableBlur stand-in) -
+def make_wallpaper(photo):
+    """A static, blurred + dimmed backdrop the scrolling content dissolves into."""
+    return fx_brightness(fx_blur(photo, WALL_BLUR), WALL_DIM)
 
 
-def build_feed(photo):
-    """A tall scrollable 'screen': the photo as a hero, then a column of cards."""
-    feed = Image.new("RGB", (W, FEED_H), (244, 245, 248))
-    feed.paste(photo, (0, 0))
-    d = ImageDraw.Draw(feed, "RGBA")
+def build_feed():
+    """Tall scrollable content: a column of cards floating on a transparent canvas
+    (so the blurred wallpaper shows through the gaps and the faded edges)."""
+    feed = Image.new("RGBA", (W, FEED_H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(feed)
     title_font, sub_font = load_font(15), load_font(11)
-    y, i = 496, 0
+    y, i = 20, 0
     while y < FEED_H - 116:
         col = CARD_PALETTE[i % len(CARD_PALETTE)]
-        d.rounded_rectangle([16, y, W - 16, y + 96], 18, fill=col)
+        d.rounded_rectangle([16, y, W - 16, y + 96], 18, fill=col + (255,))
         d.ellipse([30, y + 24, 78, y + 72], fill=(255, 255, 255, 70))
-        d.text((92, y + 26), f"Item {i + 1}", font=title_font, fill=(255, 255, 255, 240))
-        d.text((92, y + 50), "Tap to open this card", font=sub_font, fill=(255, 255, 255, 205))
+        d.text((92, y + 26), f"Item {i + 1}", font=title_font, fill=(255, 255, 255, 245))
+        d.text((92, y + 50), "Tap to open this card", font=sub_font, fill=(255, 255, 255, 210))
         y += 112
         i += 1
     return feed
 
 
-def edge_frame(feed, off, title_font, tab_font):
-    """One scroll frame: blur only the two pinned bar strips of the live viewport."""
-    view = feed.crop((0, int(round(off)), W, int(round(off)) + H)).convert("RGB")
-    blurred = fx_brightness(fx_blur(view, EDGE_BLUR), EDGE_BRIGHT)
+def vertical_edge_mask(fade):
+    """An 'L' gradient: 0 at the very top/bottom edges, ramping to 255 by `fade` px in,
+    255 across the middle. Used both to fade the content out and to reveal the blur."""
+    m = Image.new("L", (W, H), 255)
+    d = ImageDraw.Draw(m)
+    for y in range(H):
+        edge = min(y, H - 1 - y)
+        d.line([(0, y), (W, y)], fill=int(255 * smoothstep(edge / fade)))
+    return m
 
-    out = view.copy()
-    out.paste(blurred.crop((0, 0, W, TOPBAR_H)), (0, 0))                  # top nav bar
-    out.paste(blurred.crop((0, H - BOTBAR_H, W, H)), (0, H - BOTBAR_H))   # bottom tab bar
 
-    d = ImageDraw.Draw(out, "RGBA")
-    d.rectangle([0, 0, W, TOPBAR_H], fill=(255, 255, 255, 30))            # frosted material wash
-    d.rectangle([0, H - BOTBAR_H, W, H], fill=(255, 255, 255, 30))
-    d.line([(0, TOPBAR_H), (W, TOPBAR_H)], fill=(0, 0, 0, 45))            # hairline separators
-    d.line([(0, H - BOTBAR_H), (W, H - BOTBAR_H)], fill=(0, 0, 0, 45))
-
-    text_shadowed(d, (16, 16), "9:41", tab_font, (255, 255, 255, 240))
-    title = "Gallery"
-    text_shadowed(d, ((W - d.textlength(title, font=title_font)) / 2, 58), title,
-                  title_font, (255, 255, 255, 245))
-
-    tabs = ["Home", "Search", "Saved", "Profile"]
-    for j, t in enumerate(tabs):
-        cx = (j + 0.5) * W / len(tabs)
-        d.ellipse([cx - 6, H - BOTBAR_H + 20, cx + 6, H - BOTBAR_H + 32], fill=(255, 255, 255, 235))
-        text_shadowed(d, (cx - d.textlength(t, font=tab_font) / 2, H - BOTBAR_H + 36), t,
-                      tab_font, (255, 255, 255, 230))
-    return out
+def edge_frame(feed, off, wallpaper, content_mask, blur_reveal):
+    """One scroll frame. Fade the content to clear at the edges over the wallpaper,
+    then reveal a Gaussian blur through the edge gradient — a variable blur whose
+    strength is driven by a mask, exactly like CIFilter.maskedVariableBlur."""
+    view = feed.crop((0, int(round(off)), W, int(round(off)) + H))     # RGBA, cards on clear
+    faded = ImageChops.multiply(view.getchannel("A"), content_mask)    # clear at edges
+    comp = wallpaper.copy()
+    comp.paste(view, (0, 0), faded)                                     # content over wallpaper
+    blurred = fx_blur(comp, EDGE_BLUR)
+    return Image.composite(blurred, comp, blur_reveal)                  # blur only at the edges
 
 
 def make_edge_scroll_gif(photo, path):
-    """The headline use case: pinned frosted bars whose blur tracks scrolling content."""
-    feed = build_feed(photo)
+    """The headline use case: a variable blur whose fade stays pinned to the screen
+    edges while the content scrolls behind it (a CIFilter.maskedVariableBlur stand-in)."""
+    feed = build_feed()
+    wallpaper = make_wallpaper(photo)
+    content_mask = vertical_edge_mask(CONTENT_FADE)
+    blur_reveal = ImageChops.invert(vertical_edge_mask(BLUR_FADE))     # 255 at edges, 0 centre
     max_off = FEED_H - H
-    title_font, tab_font = load_font(16), load_font(11)
 
     offsets = [max_off * smoothstep(k / SCROLL_STEPS) for k in range(SCROLL_STEPS + 1)]
     offsets += [max_off] * SCROLL_HOLD
     offsets += [max_off * smoothstep(1 - k / SCROLL_STEPS) for k in range(1, SCROLL_STEPS + 1)]
     offsets += [0.0] * SCROLL_HOLD
 
-    frames = [edge_frame(feed, off, title_font, tab_font) for off in offsets]
+    frames = [edge_frame(feed, off, wallpaper, content_mask, blur_reveal) for off in offsets]
     save_gif(frames, path, EDGE_MS)
 
 

@@ -17,7 +17,7 @@ date: 2026-06-27
 
 **VisualEffect** takes a different route. It keeps the one thing only a real `UIVisualEffectView` can provide — the live backdrop capture of whatever is behind it — strips away Apple's fixed blur, and applies its own blur and colour adjustments under full animation control. You get a fully animatable, *variable* backdrop: seven effects (blur, brightness, contrast, saturation, grayscale, hue rotation, opacity), an implicit spring on every change, and a gesture-driven interactive API. You drive all of it from **UIKit or SwiftUI**.
 
-Its headline use is a blur pinned to a scrolling edge — a frosted navigation or tab bar that blurs content moving behind it — which we'll build first.
+Its headline use is a *variable* blur along a scrolling edge — a progressive blur that's strong at the screen edge and fades to nothing as content moves behind it, the effect you'd otherwise build with `CIFilter.maskedVariableBlur` — which we'll build first.
 
 It's open-sourced at [github.com/noahplutzer/swift-visual-effect](https://github.com/noahplutzer/swift-visual-effect) (iOS 17+, Swift 6, MIT).
 
@@ -68,80 +68,90 @@ That "live backdrop" property is the whole reason the next section works.
 
 ---
 
-## The primary use case: a variable blur pinned to a scrolling edge
+## The primary use case: a variable blur on a scrolling edge
 
-The single most common job for a blur view is a **frosted navigation or tab bar** — a strip pinned to a screen edge that blurs the content scrolling underneath it. Because VisualEffect's backdrop is captured live, the blur is *variable*: it re-samples whatever is behind the strip on every frame, so it stays frosted over an ever-changing background as the user scrolls.
+The fashionable way to treat the top and bottom of a scroll view is a **variable blur** — a blur that is strong at the very screen edge and fades to nothing toward the centre, so content gently dissolves into the status-bar and home-indicator areas instead of colliding with a hard line. On its own, Core Image gives you `CIFilter.maskedVariableBlur`: you hand it an image and a grayscale mask, and it varies the blur by the mask. But that's a per-frame Core Image render over a static image — awkward to animate and to run live over scrolling content.
 
-![A frosted nav bar and tab bar blurring content as it scrolls behind them](02-edgescroll.gif){:width="280"}
-*The bars stay pinned while the feed scrolls — each bar blurs whatever content is behind it at that moment, and the blur bleeds cleanly to the very screen edge.*
+VisualEffect gives you the same look with none of that. The blur it applies is uniform, so the *variable* part comes from **masking the live-backdrop view with a gradient** — `.mask(LinearGradient(...))` in SwiftUI, or a `CAGradientLayer` in UIKit. The result updates live as content scrolls, animates like any other SwiftUI view, and never round-trips through Core Image.
 
-Two details make this work:
+![A variable blur fading along the top and bottom edges as content scrolls and dissolves behind it](02-edgescroll.gif){:width="280"}
+*The blur and the fade stay pinned to the edges while the feed scrolls. Toward each edge a card progressively blurs and then dissolves into the wallpaper; the centre stays sharp and fully opaque.*
 
-- **Use the backdrop view, not the content modifier.** There are two ways to apply effects with this library. The `.visualEffects(_:)` modifier (covered below) blurs a view's *own* content. To blur content *behind* a surface — which is what a bar over a scroll view needs — use the UIKit `VisualEffectView` or its SwiftUI wrapper `VisualEffectViewRepresentable`. Those host the live backdrop.
-- **Negative `blurInsets` so the blur bleeds to the edge.** A Gaussian blur fades toward the boundary of its source surface, leaving a darkened rim. `blurInsets` grows the rendering surface past the view's bounds; with negative insets on the edge that meets the screen, the rim falls *outside* the visible strip and the blur reads solid right up to the notch or home indicator. (Leave `clippedBlur` at its default `false` so the surface is free to bleed.) The library's own example uses `UIEdgeInsets(top: -40, left: -40, bottom: -40, right: -40)`.
+The effect is two gradient masks, both confined to the edges:
 
-**UIKit** — pin two `VisualEffectView`s over a scroll view:
+- **The variable blur** — a `VisualEffectView` (or `VisualEffectViewRepresentable`) pinned to the edge, masked by a gradient so the blur is full at the very edge and gone toward the centre. This is the `CIFilter.maskedVariableBlur` replacement. Use the backdrop view here, *not* `.visualEffects(_:)`: the backdrop view blurs whatever is *behind* it (the scrolling content), whereas `.visualEffects(_:)` blurs a view's *own* content.
+- **The content edge fade** — a `LinearGradient` mask on the scroll content itself, so its top and bottom **edges become clear** while the centre stays fully visible. The content dissolves into whatever sits behind it (here, a blurred wallpaper).
+
+Keep `clippedBlur` at its default `false` and give the effect view negative `blurInsets` on the pinned edge, so the blurred surface bleeds past the bounds and reads solid right up to the notch / home indicator — no darkened rim.
+
+**SwiftUI** — a wallpaper, the masked scroll content, and a gradient-masked blur on each edge:
 
 ```swift
-let scrollView = UIScrollView()
-scrollView.frame = view.bounds
-scrollView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-view.addSubview(scrollView)            // tall content goes in here
+ZStack {
+    // 1. A blurred wallpaper the content dissolves into.
+    Image("photo")
+        .resizable().scaledToFill()
+        .blur(radius: 32)
+        .overlay(Color.black.opacity(0.1))
+        .ignoresSafeArea()
 
-// Frosted nav bar — negative TOP inset bleeds the blur up into the status bar / notch.
-let navBar = VisualEffectView(
+    // 2. The scroll content, faded to clear at the top and bottom edges.
+    ScrollView {
+        LazyVStack(spacing: 12) { /* your cards */ }
+    }
+    .mask(
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.00),   // top edge: clear
+                .init(color: .black, location: 0.14),
+                .init(color: .black, location: 0.86),
+                .init(color: .clear, location: 1.00),    // bottom edge: clear
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+    )
+
+    // 3. The variable blur — a gradient-masked backdrop view on each edge.
+    VStack {
+        VisualEffectViewRepresentable(
+            blurInsets: UIEdgeInsets(top: -40, left: -40, bottom: 0, right: -40),
+            initialValues: .blurredIn
+        )
+        .frame(height: 150)
+        .mask(LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom))
+        .ignoresSafeArea(edges: .top)
+
+        Spacer()
+
+        VisualEffectViewRepresentable(
+            blurInsets: UIEdgeInsets(top: 0, left: -40, bottom: -40, right: -40),
+            initialValues: .blurredIn
+        )
+        .frame(height: 130)
+        .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
+        .ignoresSafeArea(edges: .bottom)
+    }
+}
+```
+
+**UIKit** — same idea with a `CAGradientLayer` set as the layer mask. Pin a `VisualEffectView` to the edge, and in `layoutSubviews` size a gradient layer to its bounds and assign it to `effectView.layer.mask`:
+
+```swift
+let topBlur = VisualEffectView(
     blurInsets: UIEdgeInsets(top: -40, left: -40, bottom: 0, right: -40),
-    initialValues: .blurredIn          // start frosted (blurRadius 6)
-)
-navBar.translatesAutoresizingMaskIntoConstraints = false
-view.addSubview(navBar)                // sits above the scroll view
-
-// Frosted tab bar — negative BOTTOM inset bleeds the blur down past the home indicator.
-let tabBar = VisualEffectView(
-    blurInsets: UIEdgeInsets(top: 0, left: -40, bottom: -40, right: -40),
     initialValues: .blurredIn
 )
-tabBar.translatesAutoresizingMaskIntoConstraints = false
-view.addSubview(tabBar)
+let gradient = CAGradientLayer()
+gradient.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]   // opaque at the edge → clear
+gradient.startPoint = CGPoint(x: 0.5, y: 0)
+gradient.endPoint   = CGPoint(x: 0.5, y: 1)
+topBlur.layer.mask = gradient
+// in layoutSubviews: gradient.frame = topBlur.bounds
 
-NSLayoutConstraint.activate([
-    navBar.topAnchor.constraint(equalTo: view.topAnchor),
-    navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-    navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-    navBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 44),
-
-    tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-    tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-    tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-    tabBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -49),
-])
+// Mask the scroll view's content the same way to fade its edges to clear.
 ```
 
-**SwiftUI** — overlay the representable on each edge of a `ScrollView`:
-
-```swift
-ScrollView {
-    LazyVStack(spacing: 12) { /* your feed */ }
-}
-.overlay(alignment: .top) {
-    VisualEffectViewRepresentable(
-        blurInsets: UIEdgeInsets(top: -40, left: -40, bottom: 0, right: -40),
-        initialValues: .blurredIn
-    )
-    .frame(height: 100)
-    .ignoresSafeArea(edges: .top)
-}
-.overlay(alignment: .bottom) {
-    VisualEffectViewRepresentable(
-        blurInsets: UIEdgeInsets(top: 0, left: -40, bottom: -40, right: -40),
-        initialValues: .blurredIn
-    )
-    .frame(height: 88)
-    .ignoresSafeArea(edges: .bottom)
-}
-```
-
-Because each bar holds a `VisualEffectState`, you can animate it like anything else — fade the bars' blur in as the user starts scrolling, for instance — using the techniques in the rest of this guide.
+Because each effect view holds a `VisualEffectState`, the blur is fully animatable — fade it in as the user starts scrolling, for instance — using the techniques in the rest of this guide. That's the part `CIFilter.maskedVariableBlur` can't give you for free.
 
 ---
 
@@ -409,7 +419,8 @@ effectView.effectValues = VisualEffectValues(blurRadius: 6, grayscale: 0.4, hueR
 
 | Tip | Why |
 |-----|-----|
-| Pin bars with the *backdrop* view, not `.visualEffects` | `VisualEffectView` / `VisualEffectViewRepresentable` blur what's behind them; `.visualEffects(_:)` blurs the view's own content |
+| For a backdrop blur, use the *backdrop* view, not `.visualEffects` | `VisualEffectView` / `VisualEffectViewRepresentable` blur what's behind them; `.visualEffects(_:)` blurs the view's own content |
+| Make a variable blur with a gradient mask | Mask a pinned backdrop view with a `LinearGradient` / `CAGradientLayer` for a live, animatable `CIFilter.maskedVariableBlur` — no Core Image round-trip |
 | Use negative `blurInsets` on the pinned edge | The blurred surface bleeds past the bounds so it reads solid to the notch/home indicator, with no darkened rim |
 | Keep one `VisualEffectState` per surface | It's the single source of truth the effect layer observes; share it between your UIKit/SwiftUI code and gesture handlers |
 | Let SwiftUI own the interpolation | Never wrap value changes in your own animator — assign `values` and the implicit spring handles it |
