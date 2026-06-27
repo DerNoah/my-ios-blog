@@ -7,17 +7,18 @@
 //  SwiftUI's `.visualEffect { ... }` chain in swift-visual-effect.
 //
 //      01-original.png ... the source photo, no effect
-//      02-blur.png ....... CIGaussianBlur  radius 6
-//      03-brightness.png . CIColorControls brightness +0.18 (additive)
-//      04-contrast.png ... CIColorControls contrast 1.4
-//      05-saturation.png . CIColorControls saturation 1.8
-//      06-grayscale.png .. blend toward a saturation-0 copy by 0.85
-//      07-hue.png ........ CIHueAdjust 90 degrees
-//      08-opacity.png .... a frosted card at opacity 0.75 over the sharp photo
-//      09-frosted.png .... the composed frosted-glass card
-//      10-blurin.gif ..... implicit spring blur-in (blurRadius 0 -> 6)
-//      11-scrub.gif ...... interactive scrub: fractionComplete 0 -> 1 -> 0
-//      12-fadeout.gif .... blurOverridesOpacity dismissal (alpha = min(1, blur))
+//      02-edgescroll.gif . primary use case: frosted nav + tab bars pinned over scrolling content
+//      03-blur.png ....... CIGaussianBlur  radius 6
+//      04-brightness.png . CIColorControls brightness +0.18 (additive)
+//      05-contrast.png ... CIColorControls contrast 1.4
+//      06-saturation.png . CIColorControls saturation 1.8
+//      07-grayscale.png .. blend toward a saturation-0 copy by 0.85
+//      08-hue.png ........ CIHueAdjust 90 degrees
+//      09-opacity.png .... a frosted card at opacity 0.75 over the sharp photo
+//      10-frosted.png .... the composed frosted-glass card
+//      11-blurin.gif ..... implicit spring blur-in (blurRadius 0 -> 6)
+//      12-scrub.gif ...... interactive scrub: fractionComplete 0 -> 1 -> 0
+//      13-fadeout.gif .... blurOverridesOpacity dismissal (alpha = min(1, blur))
 //
 //  This is the higher-fidelity companion to generate_visualeffect.py: it drives
 //  the same Core Image filters the library relies on, on a single shared
@@ -56,6 +57,16 @@ let cardBlur = 6.0, cardBright = 0.10, cardSat = 1.4
 let cardRadius: CGFloat = 28
 
 let scrubBlur = 6.0, scrubBright = 0.15, scrubSat = 1.6
+
+// Edge-scroll demo: a frosted nav bar + tab bar pinned over scrolling content.
+let feedH = 1180
+let topBarH = 104, botBarH = 88
+let edgeBlur = 14.0, edgeBright = 0.06
+let scrollSteps = 18, scrollHold = 3, edgeMS = 0.055
+let cardPalette: [(CGFloat, CGFloat, CGFloat)] = [
+    (255, 95, 86), (255, 159, 67), (72, 199, 142),
+    (45, 152, 229), (155, 89, 217), (255, 107, 158),
+].map { ($0.0 / 255, $0.1 / 255, $0.2 / 255) }
 
 // MARK: - Shared Core Image context (sRGB working + output space)
 
@@ -265,6 +276,94 @@ func makeFadeOutGIF(_ photo: CGImage, to path: String) {
     writeGIF(frames, frameDelay: 0.045, to: path)
 }
 
+// MARK: - Edge-scroll demo (the primary use case: a variable blur pinned to edges)
+
+func drawText(_ ctx: CGContext, _ text: String, x: CGFloat, baseline: CGFloat,
+              size: CGFloat, alpha: CGFloat = 0.95, center: Bool = false) {
+    let font = CTFontCreateWithName("Helvetica" as CFString, size, nil)
+    func line(_ color: CGColor) -> CTLine {
+        let attrs: [CFString: Any] = [kCTFontAttributeName: font, kCTForegroundColorAttributeName: color]
+        return CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text as CFString, attrs as CFDictionary)!)
+    }
+    let main = line(CGColor(red: 1, green: 1, blue: 1, alpha: alpha))
+    var ox = x
+    if center { ox = x - CGFloat(CTLineGetTypographicBounds(main, nil, nil, nil)) / 2 }
+    ctx.textPosition = CGPoint(x: ox + 1, y: baseline - 1)
+    CTLineDraw(line(CGColor(red: 0, green: 0, blue: 0, alpha: 0.45)), ctx)
+    ctx.textPosition = CGPoint(x: ox, y: baseline)
+    CTLineDraw(main, ctx)
+}
+
+// A tall scrollable "screen": the photo as a hero, then a column of cards.
+// Drawn in a bottom-left context, so top-down y is converted with (feedH - y - height).
+func buildFeed(_ photo: CGImage) -> CGImage {
+    let ctx = CGContext(data: nil, width: W, height: feedH, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.setFillColor(red: 244 / 255, green: 245 / 255, blue: 248 / 255, alpha: 1)
+    ctx.fill(CGRect(x: 0, y: 0, width: W, height: feedH))
+    ctx.draw(photo, in: CGRect(x: 0, y: feedH - 480, width: W, height: 480))   // hero at the top
+
+    var ty = 496, i = 0
+    while ty < feedH - 116 {
+        let col = cardPalette[i % cardPalette.count]
+        let cy = feedH - ty - 96
+        ctx.addPath(CGPath(roundedRect: CGRect(x: 16, y: cy, width: W - 32, height: 96),
+                           cornerWidth: 18, cornerHeight: 18, transform: nil))
+        ctx.setFillColor(red: col.0, green: col.1, blue: col.2, alpha: 1)
+        ctx.fillPath()
+        ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.28)
+        ctx.fillEllipse(in: CGRect(x: 30, y: feedH - (ty + 24) - 48, width: 48, height: 48))
+        ty += 112; i += 1
+    }
+    return ctx.makeImage()!
+}
+
+func edgeFrame(_ feed: CGImage, off: Int) -> CGImage {
+    let viewport = feed.cropping(to: CGRect(x: 0, y: off, width: W, height: H))!
+    let blurred = fxBrightness(fxBlur(viewport, edgeBlur), edgeBright)
+
+    let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.draw(viewport, in: workingRect)
+    // Blur only the two pinned strips; top of content -> visible top (high y), bottom -> low y.
+    let topStrip = blurred.cropping(to: CGRect(x: 0, y: 0, width: W, height: topBarH))!
+    ctx.draw(topStrip, in: CGRect(x: 0, y: H - topBarH, width: W, height: topBarH))
+    let botStrip = blurred.cropping(to: CGRect(x: 0, y: H - botBarH, width: W, height: botBarH))!
+    ctx.draw(botStrip, in: CGRect(x: 0, y: 0, width: W, height: botBarH))
+
+    ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.12)                 // frosted material wash
+    ctx.fill(CGRect(x: 0, y: H - topBarH, width: W, height: topBarH))
+    ctx.fill(CGRect(x: 0, y: 0, width: W, height: botBarH))
+    ctx.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.18)                 // hairline separators
+    ctx.fill(CGRect(x: 0, y: H - topBarH, width: W, height: 1))
+    ctx.fill(CGRect(x: 0, y: botBarH, width: W, height: 1))
+
+    drawText(ctx, "9:41", x: 16, baseline: CGFloat(H) - 28, size: 13)
+    drawText(ctx, "Gallery", x: CGFloat(W) / 2, baseline: CGFloat(H) - 72, size: 16, center: true)
+    let tabs = ["Home", "Search", "Saved", "Profile"]
+    for (j, t) in tabs.enumerated() {
+        let cx = (CGFloat(j) + 0.5) * CGFloat(W) / CGFloat(tabs.count)
+        ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.92)
+        ctx.fillEllipse(in: CGRect(x: cx - 6, y: CGFloat(botBarH) - 30, width: 12, height: 12))
+        drawText(ctx, t, x: cx, baseline: 14, size: 11, center: true)
+    }
+    return ctx.makeImage()!
+}
+
+func makeEdgeScrollGIF(_ photo: CGImage, to path: String) {
+    let feed = buildFeed(photo)
+    let maxOff = feedH - H
+    func at(_ k: Int, reversed: Bool) -> Int {
+        let t = reversed ? 1 - Double(k) / Double(scrollSteps) : Double(k) / Double(scrollSteps)
+        return Int((Double(maxOff) * smoothstep(t)).rounded())
+    }
+    var offsets = (0...scrollSteps).map { at($0, reversed: false) }
+    offsets += Array(repeating: maxOff, count: scrollHold)
+    offsets += (1...scrollSteps).map { at($0, reversed: true) }
+    offsets += Array(repeating: 0, count: scrollHold)
+    writeGIF(offsets.map { edgeFrame(feed, off: $0) }, frameDelay: edgeMS, to: path)
+}
+
 // MARK: - Main
 
 let scriptDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()   // .../scripts
@@ -279,17 +378,18 @@ let photo = resize(loadCGImage(inputPath), W, H)
 print("source: \(inputPath) -> \(W)x\(H)")
 
 writePNG(photo, to: "\(outDir)/01-original.png")
-writePNG(fxBlur(photo, blurRadius), to: "\(outDir)/02-blur.png")
-writePNG(fxBrightness(photo, brightnessAmt), to: "\(outDir)/03-brightness.png")
-writePNG(fxContrast(photo, contrastAmt), to: "\(outDir)/04-contrast.png")
-writePNG(fxSaturation(photo, saturationAmt), to: "\(outDir)/05-saturation.png")
-writePNG(fxGrayscale(photo, grayscaleAmt), to: "\(outDir)/06-grayscale.png")
-writePNG(fxHue(photo, hueDegrees), to: "\(outDir)/07-hue.png")
-writePNG(makeCard(photo, opacity: opacityAmt), to: "\(outDir)/08-opacity.png")
-writePNG(makeCard(photo), to: "\(outDir)/09-frosted.png")
+makeEdgeScrollGIF(photo, to: "\(outDir)/02-edgescroll.gif")
+writePNG(fxBlur(photo, blurRadius), to: "\(outDir)/03-blur.png")
+writePNG(fxBrightness(photo, brightnessAmt), to: "\(outDir)/04-brightness.png")
+writePNG(fxContrast(photo, contrastAmt), to: "\(outDir)/05-contrast.png")
+writePNG(fxSaturation(photo, saturationAmt), to: "\(outDir)/06-saturation.png")
+writePNG(fxGrayscale(photo, grayscaleAmt), to: "\(outDir)/07-grayscale.png")
+writePNG(fxHue(photo, hueDegrees), to: "\(outDir)/08-hue.png")
+writePNG(makeCard(photo, opacity: opacityAmt), to: "\(outDir)/09-opacity.png")
+writePNG(makeCard(photo), to: "\(outDir)/10-frosted.png")
 
-makeBlurInGIF(photo, to: "\(outDir)/10-blurin.gif")
-makeScrubGIF(photo, to: "\(outDir)/11-scrub.gif")
-makeFadeOutGIF(photo, to: "\(outDir)/12-fadeout.gif")
+makeBlurInGIF(photo, to: "\(outDir)/11-blurin.gif")
+makeScrubGIF(photo, to: "\(outDir)/12-scrub.gif")
+makeFadeOutGIF(photo, to: "\(outDir)/13-fadeout.gif")
 
 print("Done.")
