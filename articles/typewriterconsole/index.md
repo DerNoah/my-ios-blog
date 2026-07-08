@@ -15,6 +15,9 @@ date: 2026-07-07
 
 TypewriterConsole is a terminal-style console view for SwiftUI. You hand it an array of timestamped entries and each new line *types itself in* with a per-letter fade; an optional live region at the bottom renders text that is still streaming — coalesced LLM tokens, build output, a download log. And because everything is rendered into a single AppKit/UIKit text view, the whole console is **one selectable surface**: a selection can span any number of lines, ⌘C copies them with their timestamps, and neither streaming appends nor the reveal animation ever reset what you've selected — just like Terminal or Xcode's console. It's open-sourced at [github.com/DerNoah/swift-typewriter-console](https://github.com/DerNoah/swift-typewriter-console) (iOS 17+ / macOS 14+, Swift 6, MIT, no dependencies).
 
+<video src="01-console.mp4" width="560" autoplay loop muted playsinline></video>
+*A scripted session: lines type themselves in, a progress line rewrites in place, and a streamed summary graduates seamlessly into the log.*
+
 This article walks through the problem it solves, the two views it ships, and the mechanics that make a typewriter animation coexist with live streaming and text selection.
 
 ---
@@ -93,6 +96,9 @@ Every line — timestamp prefix, message text, the live streaming region — liv
 - **Selection survives streaming.** When the model changes, `ConsoleView` doesn't rebuild the text — it applies an incremental edit (append, rewrite, drop) to the storage, and the platform text system *shifts existing selections through edits* like any editor would.
 - **Selection survives the animation.** The typewriter reveal never touches characters at all — it only animates the alpha of the `foregroundColor` attribute, which doesn't intersect with selection state.
 
+<video src="05-selection.mp4" width="560" autoplay loop muted playsinline></video>
+*A selection made mid-run: appends, an in-place progress rewrite, and a whole streamed response all arrive after it — the selection never moves.*
+
 One implementation detail matters if you ever build something similar: all offsets into the storage are handled in UTF-16 units throughout, because that's the currency of `NSTextStorage` — mixing in `String.count` off-by-ones around emoji is the classic way these views corrupt themselves.
 
 Scrolling behaves like a terminal too: the console auto-scrolls only while the user is already at the bottom. Scroll up to read history and it stays put while output keeps arriving.
@@ -102,6 +108,9 @@ Scrolling behaves like a terminal too: the console auto-scrolls only while the u
 ## The typewriter reveal
 
 New lines fade in letter by letter. Two parameters on `ConsoleView` shape the effect: `perCharacter` (seconds between successive letters, default `0.0075`) and `fadeWidth` (how many letter-steps each letter's fade spans, default `1.6` — the soft leading edge).
+
+<video src="02-reveal.mp4" width="560" autoplay loop muted playsinline></video>
+*Slowed down (`perCharacter: 0.03`) so the soft leading edge is visible — each letter fades in on its own schedule.*
 
 The mechanics are deliberately boring: the reveal is **attribute-only**. A line's characters are all present in the storage from the moment it's appended — layout happens exactly once, at the line's final size — and a single shared timer walks the reveal cursor forward, updating only color alpha. No per-character views, no re-layout per frame, no lines shifting below the one that's typing. When nothing is animating, the timer stops entirely; an idle console costs nothing.
 
@@ -128,6 +137,9 @@ ConsoleView(
 The caller keeps one growing string plus two pieces of chunk bookkeeping: where the newest chunk starts (`revealFrom`) and when it arrived (`chunkAt`). Everything before `revealFrom` renders fully revealed; only the newest chunk animates.
 
 The pacing rule is what makes token streams read well: the newest chunk's fade is paced to finish within roughly one flush interval (~100 ms), *whatever the chunk size*. A three-token flush types in gently; a forty-token burst types in faster but still smoothly — the console absorbs the bursty arrival pattern and produces one continuous typing motion, instead of the freeze-then-paragraph stutter of naive appends.
+
+<video src="03-streaming.mp4" width="560" autoplay loop muted playsinline></video>
+*Bursty chunks — including two deliberate stalls — absorbed into one continuous typing motion, then graduated into the log.*
 
 When the generation completes, graduate the stream into the permanent log:
 
@@ -163,6 +175,9 @@ The per-letter fade also ships as a plain SwiftUI view, for typewriter text outs
 ```swift
 TypewriterText(text: "Hello, world.", start: revealStart)
 ```
+
+<video src="04-typewritertext.mp4" width="560" autoplay loop muted playsinline></video>
+*The standalone view: one concatenated `Text`, revealing on its own timeline.*
 
 It's pure SwiftUI (`TimelineView(.animation)` driving per-letter opacity in one concatenated `Text` — no `TextRenderer`, hence the macOS 14/iOS 17 floor), it reserves its full final size so a revealing line never shifts its neighbors, and it's built to be cheap in aggregates: only the few letters inside the fade window are rendered individually, and once the reveal has elapsed the view settles into a single static `Text` with no per-frame timeline at all.
 

@@ -11,3 +11,4 @@ exclude:
   - articles/blurhash/tshirt_example.jpg
   - articles/visualeffect/scripts
   - articles/sphereview/scripts
+  - articles/typewriterconsole/scripts
