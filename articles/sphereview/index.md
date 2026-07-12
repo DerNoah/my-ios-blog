@@ -4,11 +4,11 @@ title: "SphereView: Arranging Views on a Sphere with a Fibonacci Lattice"
 subtitle: "A step-by-step UIKit guide to distributing subviews evenly over a sphere, faking depth, and driving it with pan-to-rotate, momentum, pinch-to-zoom, and snap-to-front."
 permalink: /articles/sphereview/
 date: 2026-06-27
----
-
-* TOC
-{:toc}
-
+category: UIKit
+tags: [UIKit, Graphics]
+signature: sphere
+tile: /articles/sphereview/01-intro.png
+excerpt_short: "Distribute subviews evenly over a sphere, fake depth, and drive it with pan-to-rotate, momentum, and snap-to-front."
 ---
 
 ## What is SphereView?

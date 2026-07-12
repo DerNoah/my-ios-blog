@@ -4,11 +4,11 @@ title: "BlurHash: Instant Image Placeholders on iOS"
 subtitle: "A step-by-step UIKit guide to implementing smooth, color-accurate image placeholders using BlurHash."
 permalink: /articles/blurhash/
 date: 2026-06-02
----
-
-* TOC
-{:toc}
-
+category: UIKit
+tags: [UIKit, Performance]
+signature: blurhash
+mock: blurhash
+excerpt_short: "Smooth, color-accurate image placeholders from a 30-character string — decoded on-device in milliseconds."
 ---
 
 ## What is BlurHash?

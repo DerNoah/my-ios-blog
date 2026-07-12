@@ -1,0 +1,12 @@
+<nav class="site-nav">
+  <div class="nav-brand">
+    <a href="{{ '/' | relative_url }}">{{ site.brand }}</a>
+    <span class="nav-tagline">{{ site.title }}</span>
+  </div>
+  <div class="nav-links">
+    <a href="{{ '/articles/' | relative_url }}">Articles</a>
+    <a href="{{ '/#about' | relative_url }}">About</a>
+    <a href="{{ site.author.github }}">GitHub</a>
+    <a class="nav-cv" href="{{ '/#cv' | relative_url }}">CV</a>
+  </div>
+</nav>

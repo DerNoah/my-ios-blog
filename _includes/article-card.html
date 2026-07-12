@@ -1,0 +1,10 @@
+<a class="article-card" href="{{ include.article.url | relative_url }}">
+  <div class="card-tile sig-{{ include.article.signature }}">
+    {% include tile.html article=include.article %}
+  </div>
+  <div class="card-body">
+    <div class="card-meta">{{ include.article.date | date: "%B %-d, %Y" }} · {{ include.article.category }}</div>
+    <div class="card-title">{{ include.article.title }}</div>
+    <div class="card-excerpt">{{ include.article.excerpt_short | default: include.article.subtitle }}</div>
+  </div>
+</a>

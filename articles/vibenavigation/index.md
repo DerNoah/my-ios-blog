@@ -4,11 +4,11 @@ title: "VibeNavigation: Route-Based Modular Navigation for iOS"
 subtitle: "A step-by-step guide to decoupling iOS features with routes, macros, and a compile-time screen check — so teams ship screens without ever importing each other's code."
 permalink: /articles/vibenavigation/
 date: 2026-07-06
----
-
-* TOC
-{:toc}
-
+category: Architecture
+tags: [Architecture, SwiftUI]
+signature: vibenav
+mock: routes
+excerpt_short: "Decoupling iOS features with routes, macros, and a compile-time screen check — ship screens without importing each other’s code."
 ---
 
 ## What is VibeNavigation?

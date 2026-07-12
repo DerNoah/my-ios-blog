@@ -1,8 +1,24 @@
 title: My iOS Journey
-description: My iOS blog
-theme: jekyll-theme-cayman
-url: "http://www.noahmilan.com"
+description: iOS engineering deep-dives — architecture, rendering, performance.
+url: "https://www.noahmilan.com"
 markdown: kramdown
+
+brand: Noah Milan
+author:
+  name: Noah Plützer
+  bio: iOS engineer writing about production problems that aren’t well documented.
+  photo: /assets/img/noah.jpg
+  github: https://github.com/dernoah
+  linkedin: https://linkedin.com/in/noah-pl%C3%BCtzer-0b7a27229/
+  email: noah.pluetzer@gmail.com
+
+cv:
+  en: /assets/cv/noah-pluetzer-resume-en.pdf
+  de: /assets/cv/noah-pluetzer-lebenslauf-de.pdf
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
 
 # Keep article generator scripts and the large source image out of the built site.
 exclude:

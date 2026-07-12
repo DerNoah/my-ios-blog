@@ -4,11 +4,11 @@ title: "TypewriterConsole: A Terminal-Style Streaming Console for SwiftUI"
 subtitle: "A step-by-step SwiftUI guide to timestamped log lines that type themselves in, a live region for streaming LLM output, and text selection that spans every line and survives the stream — all in one text view."
 permalink: /articles/typewriterconsole/
 date: 2026-07-07
----
-
-* TOC
-{:toc}
-
+category: SwiftUI
+tags: [SwiftUI, Performance]
+signature: typewriter
+mock: terminal
+excerpt_short: "Timestamped log lines that type themselves in, a live region for streaming LLM output, and selection that survives the stream — all in one text view."
 ---
 
 ## What is TypewriterConsole?

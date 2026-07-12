@@ -1,0 +1,51 @@
+---
+layout: default
+---
+{% assign articles = site.pages | where: "layout", "post" | sort: "date" | reverse %}
+{% assign featured = articles.first %}
+
+<section class="hero wrap">
+  <h1>{{ page.hero_title }}</h1>
+  <p class="hero-lead">{{ page.hero_lead }}</p>
+  <div class="hero-chips">
+    <a class="chip" href="{{ site.author.github }}">GitHub</a>
+    <a class="chip" href="{{ site.author.linkedin }}">LinkedIn</a>
+    <a class="chip" href="mailto:{{ site.author.email }}">Email</a>
+  </div>
+</section>
+
+<section class="featured-wrap wrap">
+  <a class="featured sig-{{ featured.signature }}" href="{{ featured.url | relative_url }}">
+    <div class="featured-text">
+      <div class="featured-meta">
+        <span class="featured-badge">Latest</span>
+        <span class="featured-date">{{ featured.date | date: "%B %-d, %Y" }} · {{ featured.category }}</span>
+      </div>
+      <div class="featured-title">{{ featured.title }}</div>
+      <div class="featured-excerpt">{{ featured.excerpt_short | default: featured.subtitle }}</div>
+      <div class="featured-cta">Read article <span class="arrow">→</span></div>
+    </div>
+    <div class="featured-media">
+      {% include tile.html article=featured %}
+    </div>
+  </a>
+</section>
+
+<section class="grid-wrap wrap">
+  <div class="article-grid">
+    {% for article in articles offset: 1 %}
+      {% include article-card.html article=article %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="cv-band-wrap wrap">
+  {% include cv-band.html %}
+</section>
+
+<section class="about wrap" id="about">
+  <h2>Why this blog?</h2>
+  <div class="about-cols">
+    {{ content }}
+  </div>
+</section>

@@ -4,11 +4,11 @@ title: "VisualEffect: A Variable, Animatable Backdrop Blur for iOS"
 subtitle: "A step-by-step guide to a live, animatable frosted-glass backdrop on iOS 17+ — pin it to a scrolling edge as a variable blur, drive it from UIKit or SwiftUI, and dismiss it with a gesture."
 permalink: /articles/visualeffect/
 date: 2026-06-27
----
-
-* TOC
-{:toc}
-
+category: Graphics
+tags: [Graphics, UIKit]
+signature: visualfx
+tile: /articles/visualeffect/10-frosted.png
+excerpt_short: "A live, animatable frosted-glass backdrop on iOS 17+ — pin it to a scrolling edge and drive it from UIKit or SwiftUI."
 ---
 
 ## What is VisualEffect?

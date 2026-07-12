@@ -1,19 +1,11 @@
 ---
-layout: default
+layout: home
 title: My iOS Journey
 permalink: /
+hero_title: "Hi, I’m Noah 👋"
+hero_lead: "iOS engineer from Germany, building apps that feel as good as they look. I write about the problems that aren’t well documented — architecture, rendering, performance, and the details that make software feel premium."
 ---
 
-{% include biography.md %}
+Many of the problems I’ve hit in production weren’t well documented. After hours of researching, profiling, and sometimes reverse-engineering frameworks, I write the resource I wish I had found in the first place.
 
-## CV
-
-- [Lebenslauf (Deutsch, PDF)](/assets/cv/noah-pluetzer-lebenslauf-de.pdf)
-- [Resume (English, PDF)](/assets/cv/noah-pluetzer-resume-en.pdf)
-
-## Articles
-
-{% assign articles = site.pages | where: "layout", "post" | sort: "date" | reverse %}
-{% for article in articles %}
-- [{{ article.title }}]({{ article.url | relative_url }}){% if article.subtitle %} — {{ article.subtitle }}{% endif %}
-{% endfor %}
+No beginner tutorials — architecture, performance, SwiftUI & UIKit internals, graphics, and tooling. Every article is based on real implementations and measurements, not theory.

@@ -1,0 +1,28 @@
+{% comment %}
+  Renders the media content for an article tile (inside a .card-tile or
+  .featured-media that already carries the sig-* gradient class).
+  Expects: include.article
+{% endcomment %}
+{% if include.article.mock == "terminal" %}
+<div class="mock-terminal">
+  <div class="mock-terminal-bar"><span></span><span></span><span></span></div>
+  <div class="mock-terminal-body">
+    <div><span class="ts">[12:04:31]</span> ▸ Build succeeded (2.4 s)</div>
+    <div><span class="ts">[12:04:32]</span> ▸ Streaming 128 tokens…</div>
+    <div class="typed">The quick brown fox jumps over the l<span class="cursor"></span></div>
+  </div>
+</div>
+{% elsif include.article.mock == "routes" %}
+<div class="mock-routes">
+  <span class="route">home</span>
+  <span class="sep">→</span>
+  <span class="route">profile/42</span>
+  <span class="sep">→</span>
+  <span class="route-active">post/7</span>
+</div>
+<div class="mock-routes-caption">myapp://post/7 ✓ compile-time checked</div>
+{% elsif include.article.mock == "blurhash" %}
+<span class="mock-hash">"LGF5?xYk^6#M@-5c,1Ex@@or[j6"</span>
+{% elsif include.article.tile %}
+<img src="{{ include.article.tile | relative_url }}" alt="{{ include.article.title | escape }}">
+{% endif %}

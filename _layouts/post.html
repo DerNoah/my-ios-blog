@@ -1,9 +1,29 @@
 ---
 layout: default
 ---
-<article class="post">
-  <h1 class="post-title">{{ page.title }}</h1>
-  {% if page.subtitle %}<p class="post-subtitle">{{ page.subtitle }}</p>{% endif %}
-  {% if page.date %}<p class="post-date">{{ page.date | date: "%B %-d, %Y" }}</p>{% endif %}
-  {{ content }}
+<article>
+  <header class="post-header">
+    <a class="back-link" href="{{ '/articles/' | relative_url }}">← All articles</a>
+    {% if page.tags and page.tags.size > 0 %}
+    <div class="post-tags">
+      {% for tag in page.tags %}
+      <span class="tag {% cycle 'tag-orange', 'tag-purple' %}">{{ tag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <h1>{{ page.title }}</h1>
+    {% if page.subtitle %}
+    <p class="post-subtitle">{{ page.subtitle }}</p>
+    {% endif %}
+    <div class="byline">
+      <img src="{{ site.author.photo | relative_url }}" alt="{{ site.author.name }}">
+      <span class="byline-name">{{ site.author.name }}</span>
+      <span class="byline-date">· {{ page.date | date: "%B %-d, %Y" }}</span>
+    </div>
+  </header>
+
+  <div class="post-content">
+    {{ content }}
+    {% include author-footer.html %}
+  </div>
 </article>
